@@ -19,7 +19,7 @@ Multichannel ASR is a training-free solution for transcribing multi-channel audi
 The pipeline follows six steps to transform multi-channel audio into diarized transcripts:
 
 <div align="center">
-  <img src="./assets/workflow_diagram.jpg" alt="Workflow" width="600">
+  <img src="./assets/workflow_diagram_EN.jpg" alt="Workflow" width="600">
 </div>
 
 1. **Multi-Channel Input**: Load stereo or multi-channel audio
@@ -32,7 +32,7 @@ The pipeline follows six steps to transform multi-channel audio into diarized tr
 6. **Structured Output**: Generate Excel files with speaker labels and timestamps
 
 <div align="center">
-  <img src="./assets/technical_illustration.jpg" alt="Technical Details" width="700">
+  <img src="./assets/technical_illustration_EN.jpg" alt="Technical Details" width="700">
 </div>
 
 ## Installation
@@ -75,7 +75,7 @@ python src/main.py \
 
 ## Patent Notice
 
-This project implements the method described in Chinese Patent **CN120895028A** (Published). The code is released under the MIT License, but commercial use of the patented method may require separate authorization.
+This project implements the method described in Chinese Patent **[CN120895028A](CN120895028A.PDF)** (Published). The code is released under the MIT License, but commercial use of the patented method may require separate authorization.
 
 ## License
 
