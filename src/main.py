@@ -1,21 +1,17 @@
-# =============================================================================
-# 文件名称：pipeline.py
-# 模块功能：
-#   该模块为项目的主流程控制模块，整合了音频预处理、左右声道合并、
-#   语音分段转录、说话人匹配以及多进程调度等功能。它协调调用各个模块，
-#   并实现对多个 MP3 文件的并行处理。
-#
-# 核心功能：
-#   - load_model_and_processor_global：加载 Whisper 模型及处理器至全局变量
-#   - init_worker：多进程工作进程的初始化，加载必要的全局变量
-#   - generate_segments：根据合并后音频及时间戳生成转录分段
-#   - transcribe_pipline：对单个 MP3 文件进行整体处理，包括 VAD 分割、合并、分段转录、说话人匹配
-#   - run_pipline：包装 transcribe_pipline，捕获异常，防止多进程进程崩溃
-#   - 主进程：利用 multiprocessing.Pool 实现对待处理文件的并行调度和实时进度更新
-#
-# 使用说明：
-#   直接运行该脚本，即可自动处理指定目录下的 MP3 文件，并将转录结果输出到目标目录。
-# =============================================================================
+"""Main Pipeline for Multi-Channel ASR
+
+This module orchestrates the complete transcription pipeline, including:
+- Audio preprocessing and channel separation
+- Voice Activity Detection (VAD)
+- Channel merging with silence insertion
+- Speech recognition using Whisper model
+- Speaker diarization via timestamp matching
+- Multi-processing for batch file handling
+
+Usage:
+    python main.py --model_id <model_path> --device <cuda:0|cpu> \
+                   --src_dir <input_dir> --tgt_dir <output_dir>
+"""
 
 from VAD_split_audio import process_audio
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
@@ -44,12 +40,11 @@ total_files = None       # 总待处理文件数（共享变量）
 progress_lock = None     # 进度更新时的互斥锁
 
 def load_model_and_processor_global(model_id, device_str):
-    """加载 Whisper 模型和处理器到全局变量
-    参数：
-        model_id - 模型路径或标识符
-        device_str - 使用的设备（例如 'cuda:0' 或 'cpu'）
-    功能：
-        根据指定的设备加载模型，设置数据类型以适应计算要求
+    """Load Whisper model and processor into global variables.
+    
+    Args:
+        model_id: Model path or identifier (e.g., 'openai/whisper-large-v3')
+        device_str: Device to use ('cuda:0' or 'cpu')
     """
     global model, processor, device
     device = device_str
@@ -62,18 +57,17 @@ def load_model_and_processor_global(model_id, device_str):
     processor = AutoProcessor.from_pretrained(model_id)
 
 def init_worker(model_id, device_str, src_dir_str, tgt_dir_str, match_delta_val, counter, total, lock):
-    """多进程工作进程初始化函数
-    参数：
-        model_id - 模型标识符
-        device_str - 设备设置
-        src_dir_str - 源文件目录路径
-        tgt_dir_str - 目标输出目录路径
-        match_delta_val - 说话人匹配相关参数（备用）
-        counter - 多进程共享进度计数器
-        total - 待处理文件总数（共享）
-        lock - 进度更新时的互斥锁对象
-    功能：
-        初始化全局变量，加载模型（避免 CUDA 重复加载）
+    """Initialize worker process for multiprocessing.
+    
+    Args:
+        model_id: Model identifier
+        device_str: Device setting
+        src_dir_str: Source directory path
+        tgt_dir_str: Target output directory path
+        match_delta_val: Speaker matching parameter (reserved)
+        counter: Shared progress counter
+        total: Total number of files to process
+        lock: Lock object for progress updates
     """
     global model, processor, device, src_dir, tgt_dir, match_delta, progress_counter, total_files, progress_lock
     device = device_str
@@ -88,16 +82,16 @@ def init_worker(model_id, device_str, src_dir_str, tgt_dir_str, match_delta_val,
         load_model_and_processor_global(model_id, device)
 
 def generate_segments(timestamps, total_duration, segment_duration_sec=SEGMENT_DURATION_SEC, min_segment_sec=MIN_SEGMENT_SEC):
-    """根据时间戳和总音频时长生成转录分段
-    参数：
-        timestamps - 合并音频时记录的时间戳列表
-        total_duration - 合并后音频的总时长（单位：毫秒）
-        segment_duration_sec - 目标分段时长（单位：秒）
-        min_segment_sec - 分段的最小允许时长（单位：秒）
-    返回：
-        分段列表，每个分段为 (start_ms, end_ms)
-    说明：
-        利用 bisect 对齐已存在的切割点，确保各段均包含 VAD 边界信息
+    """Generate transcription segments based on timestamps.
+    
+    Args:
+        timestamps: List of timestamps recorded during channel merging
+        total_duration: Total duration of merged audio (milliseconds)
+        segment_duration_sec: Target segment duration (seconds)
+        min_segment_sec: Minimum allowed segment duration (seconds)
+    
+    Returns:
+        List of segments, each as (start_ms, end_ms)
     """
     segment_duration_ms = segment_duration_sec * 1000
     min_segment_ms = min_segment_sec * 1000
@@ -142,15 +136,17 @@ def generate_segments(timestamps, total_duration, segment_duration_sec=SEGMENT_D
     return chunks
 
 def transcribe_pipline(mp3_path):
-    """对单个 MP3 文件执行完整的转录流程
-    参数：
-        mp3_path - 单个 MP3 音频文件路径
-    流程：
-        1. 对音频进行 VAD 分割，生成左右声道的语音片段
-        2. 合并左右声道，并记录各片段时间戳及说话人信息
-        3. 对合并后的音频按照生成的分段进行逐段 Whisper 转录
-        4. 调整转录结果的时间戳并合并成最终的转录文件
-        5. 进行说话人匹配，并保存最终的匹配结果
+    """Execute complete transcription pipeline for a single MP3 file.
+    
+    Args:
+        mp3_path: Path to the MP3 audio file
+    
+    Pipeline:
+        1. VAD-based channel separation and speech segment extraction
+        2. Channel merging with silence insertion and timestamp recording
+        3. Segmented transcription using Whisper model
+        4. Timestamp adjustment and result merging
+        5. Speaker diarization and final output
     """
     mp3_id = os.path.basename(mp3_path).split(".")[0]
     mp3_out_dir = os.path.join(tgt_dir, mp3_id)
@@ -220,9 +216,10 @@ def transcribe_pipline(mp3_path):
     )
 
 def run_pipline(*args):
-    """包装 transcribe_pipline，捕获异常防止单文件错误中断整体流程
-    参数：
-        args - 传递给 transcribe_pipline 的参数（此处为单个 MP3 文件路径）
+    """Wrapper for transcribe_pipline with exception handling.
+    
+    Args:
+        args: Arguments passed to transcribe_pipline (MP3 file path)
     """
     try:
         transcribe_pipline(*args)
