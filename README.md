@@ -1,72 +1,88 @@
+# Multichannel ASR
 
-# 心理热线语音识别与说话人匹配（尝试六）
+**[English](README.md) | [简体中文](README_zh-CN.md)**
 
-## 项目背景
+---
 
-本项目主要针对杭州市心理热线的语音识别问题，提出了“尝试六”的整体解决方案。与前五种尝试相比，该方法在语音识别准确率和说话人匹配上均取得了显著提升。通过对左右声道分别进行语音活动检测（VAD）、合并音频片段、利用 Whisper 模型转录音频，再结合自定义的说话人匹配算法，有效解决了传统方法中对双声道语音处理及说话人切分的不足。
+## Overview
 
-## 创新之处
+Multichannel ASR is a training-free solution for transcribing multi-channel audio recordings (e.g., call center conversations, remote meetings) using standard mono-channel ASR models like OpenAI Whisper. It achieves accurate speaker diarization through a novel VAD-based channel merging and silence insertion strategy.
 
-- **左右声道分离与合并**  
-  - 使用 VAD 对左右声道分别检测语音活动，并利用自定义的规则（如静音间隔时长差异）进行合并，提升了同一说话人与不同说话人语音片段的区分度。
+## Key Features
 
-- **高效的语音转录**  
-  - 采用 Whisper 模型对合并后的音频进行分段转录，并利用多进程并行处理提高整体运算效率。
+- **Training-Free**: No model training or fine-tuning required
+- **Model Agnostic**: Works with any mono-channel ASR model (Whisper, FunASR, SenseVoice, etc.)
+- **Efficient**: Multi-processing support for batch processing
 
-- **自定义说话人匹配算法**  
-  - 根据合并音频时记录的原始时间戳及静音间隔信息，结合转录结果的时间戳，实现了精确的说话人匹配。
+## How It Works
 
-- **繁简转换处理**  
-  - 对转录得到的文本进行繁体到简体的转换，保证文本的统一性和易读性。
+The pipeline follows six steps to transform multi-channel audio into diarized transcripts:
 
-## 文件结构
+<div align="center">
+  <img src="./assets/workflow_diagram.jpg" alt="Workflow" width="600">
+</div>
 
-``` Text
-transcript_pipeline/
-├── VAD_split_audio.py        # 声道分离与语音活动检测（VAD）模块
-├── Whisper_transcribe.py     # 语音转录模块（基于 Whisper 模型）
-├── match_speaker.py          # 说话人匹配模块（根据时间戳匹配说话人）
-├── zh_t2s.py                 # 繁体转简体文本转换模块
-├── config.py                 # 配置参数设置文件
-├── combine_channels.py       # 左右声道合并及时间戳记录模块
-├── pipeline.py               # 主流程控制模块（整体流程及多进程并行处理）
-└── utils.py                  # 工具函数
+1. **Multi-Channel Input**: Load stereo or multi-channel audio
+2. **VAD & Segmentation**: Detect voice activity in each channel separately
+3. **Silence Insertion & Merging**: Merge channels with strategic silence gaps:
+   - 1000ms silence between different speakers
+   - 50ms silence within same speaker
+4. **ASR Transcription**: Transcribe merged audio using Whisper
+5. **Timestamp-based Diarization**: Match transcription timestamps to original speakers
+6. **Structured Output**: Generate Excel files with speaker labels and timestamps
+
+<div align="center">
+  <img src="./assets/technical_illustration.jpg" alt="Technical Details" width="700">
+</div>
+
+## Installation
+
+### Prerequisites
+
+- Python 3.10+
+- CUDA 12.2+ (for GPU acceleration)
+- FFmpeg: `sudo apt-get install ffmpeg` (Ubuntu) or `brew install ffmpeg` (macOS)
+
+### Install Dependencies
+
+```bash
+# Clone the repository
+git clone https://github.com/Deng-GuiFeng/multichannel-asr.git
+cd multichannel-asr
+
+# Install PyTorch with CUDA support (CUDA 12.6 is compatible with CUDA 12.2)
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+
+# Install other dependencies
+pip install -r requirements.txt
 ```
 
-## 工程流程说明
+## Usage
 
-1. **音频预处理**  
-   - **VAD 分割**：加载 MP3 文件后，利用 `VAD_split_audio.py` 对左右声道进行分离，并使用 WebRTC VAD 算法检测语音区域，合并相邻语音段，生成带有缓冲时间的语音片段。
+```bash
+python src/main.py \
+    --model_id openai/whisper-large-v3-turbo \
+    --device cuda:0 \
+    --src_dir ./data/input \
+    --tgt_dir ./data/output
+```
 
-2. **左右声道合并**  
-   - **合并与记录**：在 `combine_channels.py` 模块中，将左右声道的语音片段按照时间顺序排序，并依据说话人信息进行合并，同时在同一说话人和不同说话人之间插入不同长度的静音，记录每个合并片段的原始起止时间和说话人标签。
+**Parameters:**
+- `--model_id`: Hugging Face model ID (e.g., `openai/whisper-large-v3-turbo`)
+- `--device`: Device to use (`cuda:0` for GPU, `cpu` for CPU)
+- `--src_dir`: Input directory containing audio files
+- `--tgt_dir`: Output directory for transcripts
 
-3. **语音转录**  
-   - **分段与转录**：通过 `pipeline.py` 中的分段策略，将合并音频分割成多个片段，并利用 `Whisper_transcribe.py` 模块调用 Whisper 模型对各个片段进行逐个转录，同时调整转录时间戳。
+## Patent Notice
 
-4. **说话人匹配**  
-   - **匹配算法**：在 `match_speaker.py` 中，利用 VAD 得到的时间戳数据与转录得到的时间数据进行对比，通过计算时间重叠和相邻时间距离，实现说话人匹配及噪声过滤。
+This project implements the method described in Chinese Patent **CN120895028A** (Published). The code is released under the MIT License, but commercial use of the patented method may require separate authorization.
 
-5. **后处理与导出**  
-   - **数据整合**：对转录结果进行整合与校正，并导出为 Excel 文档，便于后续人工校验和数据分析。
+## License
 
-6. **多进程并行处理**  
-   - **提升效率**：在 `pipeline.py` 中使用多进程技术，充分利用硬件资源，对多个 MP3 文件进行并行处理，提高整体处理效率。
+[MIT License](LICENSE.txt)
 
-## 使用说明
+## Acknowledgments
 
-- **依赖安装**：  
-  请确保已安装以下依赖包：  
-  `pydub`、`webrtcvad`、`transformers`、`pandas`、`numpy`、`opencc`、`tqdm` 等。  
-  可参考项目目录下的 `requirements.txt` 进行安装。
-
-- **配置调整**：  
-  所有关键参数均在 `config.py` 中定义，如 VAD 参数、Whisper 转录参数、分段与缓冲时间设置等，用户可根据实际情况进行调整。
-
-- **运行流程**：  
-  主流程由 `pipeline.py` 控制，可直接运行该脚本。程序会自动加载音频文件、进行分割、转录、匹配并生成最终结果。
-
-## 备注
-
-- 本工程各模块均添加了详细的注释，便于后续开发人员理解代码逻辑及维护升级。
-- 本项目方法在语音识别准确率和说话人匹配上具有明显优势，符合发明专利申请的要求，相关技术细节及流程的完整说明将有助于专利撰写。
+- [OpenAI Whisper](https://github.com/openai/whisper)
+- [Hugging Face Transformers](https://github.com/huggingface/transformers)
+- [WebRTC VAD](https://github.com/wiseman/py-webrtcvad)

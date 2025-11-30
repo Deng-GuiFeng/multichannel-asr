@@ -1,8 +1,62 @@
-.vscode/
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-*.xlsx
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data and Output
+data/
+output/
+transcripts/
 *.mp3
 *.wav
-transcripts/
+*.xlsx
+*.xls
+
+# Models
+models/
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
