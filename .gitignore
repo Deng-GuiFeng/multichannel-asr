@@ -1,0 +1,8 @@
+.vscode/
+__pycache__/
+*.pyc
+
+*.xlsx
+*.mp3
+*.wav
+transcripts/
